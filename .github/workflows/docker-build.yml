@@ -1,9 +1,17 @@
-name: Build and Push Backend (Tag)
+name: Build and Push Backend
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*' # 监听正式 Tag
+  
+  # --- 新增：手动触发器 ---
+  workflow_dispatch:
+    inputs:
+      test_tag:
+        description: 'Test Tag Name (e.g. beta)'
+        required: true
+        default: 'beta'
 
 jobs:
   build:
@@ -13,20 +21,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. 提取 Tag 名字 (例如 v1.0)
-      - name: Extract Tag Name
+      # --- 关键修改：动态判断 Tag 逻辑 ---
+      - name: Determine Docker Tags
         id: meta
         run: |
-          echo "TAG_NAME=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-          echo "Detected Release Tag: ${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" == "push" ]; then
+            # 正式版：打 latest 和 vX.X
+            echo "TAGS=${{ secrets.DOCKER_USERNAME }}/bili-download-backend:latest,${{ secrets.DOCKER_USERNAME }}/bili-download-backend:${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "Running Mode: RELEASE (${GITHUB_REF_NAME})"
+          else
+            # 测试版：只打手动输入的 tag (如 beta)
+            TEST_TAG=${{ inputs.test_tag }}
+            echo "TAGS=${{ secrets.DOCKER_USERNAME }}/bili-download-backend:${TEST_TAG}" >> $GITHUB_OUTPUT
+            echo "Running Mode: MANUAL TEST (${TEST_TAG})"
+          fi
 
-      # 2. 准备 Go 环境
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
 
-      # 3. 编译 Go 二进制文件
       - name: Build Binary
         run: |
           export CGO_ENABLED=0
@@ -35,23 +49,19 @@ jobs:
           go mod download
           go build -o main main.go
       
-      # 4. 生成占位 cookie.json (防止 Docker COPY 报错)
       - name: Create Dummy Cookie
         run: echo "{}" > cookie.json
 
-      # 5. 登录 Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 6. 构建并推送镜像
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/bili-download-backend:latest
-            ${{ secrets.DOCKER_USERNAME }}/bili-download-backend:${{ steps.meta.outputs.TAG_NAME }}
+          # 使用动态生成的 tags
+          tags: ${{ steps.meta.outputs.TAGS }}
