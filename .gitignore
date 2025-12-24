@@ -1,0 +1,25 @@
+# --- 1. 忽略编译产物 (Binaries) ---
+# 忽略所有 .exe 和 .dll 文件
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 忽略具体的二进制文件名 (比如你截图里的 main)
+main
+test
+debug
+
+# --- 2. 忽略敏感配置文件 (重要!) ---
+config.yaml
+.env
+
+# --- 3. 忽略 IDE 配置 ---
+.idea/
+.vscode/
+*.swp
+
+# --- 4. 忽略临时文件 ---
+tmp/
+vendor/ 
+# (除非你明确使用 go mod vendor 模式，否则 vendor 目录通常不上传，大家都用 go mod)
