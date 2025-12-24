@@ -1,0 +1,57 @@
+name: Build and Push Backend (Tag)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. 提取 Tag 名字 (例如 v1.0)
+      - name: Extract Tag Name
+        id: meta
+        run: |
+          echo "TAG_NAME=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          echo "Detected Release Tag: ${GITHUB_REF_NAME}"
+
+      # 2. 准备 Go 环境
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      # 3. 编译 Go 二进制文件
+      - name: Build Binary
+        run: |
+          export CGO_ENABLED=0
+          export GOOS=linux
+          export GOARCH=amd64
+          go mod download
+          go build -o main main.go
+      
+      # 4. 生成占位 cookie.json (防止 Docker COPY 报错)
+      - name: Create Dummy Cookie
+        run: echo "{}" > cookie.json
+
+      # 5. 登录 Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 6. 构建并推送镜像
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/bili-download-backend:latest
+            ${{ secrets.DOCKER_USERNAME }}/bili-download-backend:${{ steps.meta.outputs.TAG_NAME }}
